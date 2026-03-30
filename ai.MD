@@ -21,3 +21,55 @@ prompt:
 - 不需要关心外部 API 的返回值
 - 只需确保通知请求能够被稳定、可靠地送达
 ```
+
+## 通过设计让 AI 给出代码实现
+prompt:
+```
+以上需求，用下面的设计，请实现具体的代码：
+## 详细设计
+### 消息生产服务
+/bin/message-router
+
+提供一个对外接口：
+- 生产消息：POST /message
+
+### 消费者服务
+/bin/message-worker
+
+用于从队列读取消息，并调用第三方接口。
+
+### 消息队列
+消息队列是个代码级模块，不是服务。是个抽象，底层可以用多种实现，如 MySQL，RocketMQ 等。
+
+// 队列
+type Queue interface {
+    // 生产消息
+    Produce(message Message) error
+    // 消费消息
+    Consume() (message Message, err error)
+}
+
+// 消息
+type Message struct {
+    // 消息 ID，使用分布式的唯一标识，不要依赖数据库主键
+    ID string `json:"id"`
+    // 消息类型，用于区分不同业务消息
+    Type string `json:"type"`
+    // 消息体，用 Json 格式存储
+    Body string `json:"body"`
+    // 状态，0 表示待处理，1 表示已处理，2 表示处理失败
+    Status int8 `json:"status"`
+    // 创建时间
+    CreateAt time.Time `json:"create_at"`
+    // 消息的重试次数，默认 0，每次重试 +1
+    RetryCount int `json:"retry_count"`
+    // 下一次重试时间，默认当前时间，重试后为：当前时间 + RetryCount 指数倍
+    NextRetryAt time.Time `json:"next_retry_at"`
+}
+
+### 业务适配层
+// 根据 Message.Type 来路由到不同的 Handler 对象处理
+type Handler struct {
+    ...
+}
+```
