@@ -37,3 +37,36 @@ broker 要做的事:
 以上是必要的设计。另外可额外考虑对 consumer 的限流，批量处理，长连接等，这些不是必要的设计，后面可考虑。
 
 设计思路一般都会对比多家，自己的是一种，不同 AI 可提供多种。如果自己不预想思路，直接找 AI，后面就很难判断哪里的是过度设计，或者哪里漏了。
+
+## 详细设计
+### 消息生产服务
+/bin/message-router
+
+提供一个对外接口：
+- 生产消息：POST /message
+
+### 消费者服务
+/bin/message-worker
+
+用于从队列读取消息，并调用第三方接口。
+
+### 消息队列
+消息队列是个代码级模块，不是服务。是个抽象，底层可以用多种实现，如 MySQL，RocketMQ 等。
+
+// 队列
+type Queue interface {
+    // 生产消息
+    Produce(message Message) error
+    // 消费消息
+    Consume() (message Message, err error)
+}
+
+// 消息
+type Message struct {
+    ID string `json:"id"`
+    Body string `json:"body"`
+    Status int8 `json:"status"`
+    CreateAt time.Time `json:"create_at"`
+    RetryCount int `json:"retry_count"`
+    NextRetryAt time.Time `json:"next_retry_at"`
+}
