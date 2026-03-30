@@ -13,25 +13,26 @@ func main() {
 	// 加载配置
 	config := LoadConfig()
 
-	// 创建队列（优先使用 MySQL，失败则使用内存队列）
-	var q queue.Queue
+	// 创建队列（使用 MySQL 队列）
 	q, err := queue.NewMySQLQueue(config.DSN)
 	if err != nil {
-		fmt.Printf("Warning: Failed to create MySQL queue: %v\n", err)
-		fmt.Println("Using memory queue instead")
-		q = queue.NewMemoryQueue()
+		fmt.Printf("Error creating MySQL queue: %v\n", err)
+		return
 	}
 
-	// 初始化处理器
+	// 业务处理配置
 	handlers := map[string]handler.Handler{
 		"user_registered": &handler.UserRegisteredHandler{},
 		"user_subscribed": &handler.UserSubscribedHandler{},
 		"user_purchased":  &handler.UserPurchasedHandler{},
 	}
 
-	// 同时启动路由器和工作线程
+	// Worker 进程启动
 	worker := worker.NewWorker(q, handlers)
 	go worker.Start(config.WorkerCount)
+
+
+	// 接口进程启动
 	r := router.NewRouter(q)
 	r.Start(config.HTTPPort)
 }

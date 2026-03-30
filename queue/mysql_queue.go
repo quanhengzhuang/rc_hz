@@ -1,148 +1,80 @@
 package queue
 
 import (
-	"database/sql"
 	"errors"
+	"sync"
 	"time"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
-// MySQLQueue MySQL 队列实现
+// MySQLQueue MySQL 队列实现（mock 版本）
 type MySQLQueue struct {
-	db *sql.DB
+	messages map[string]Message
+	mutex    sync.Mutex
 }
 
-// NewMySQLQueue 创建 MySQL 队列实例
+// NewMySQLQueue 创建 MySQL 队列实例（mock 版本）
 func NewMySQLQueue(dsn string) (*MySQLQueue, error) {
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	// 测试连接
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	// 创建消息表
-	if err := createMessageTable(db); err != nil {
-		return nil, err
-	}
-
-	return &MySQLQueue{db: db}, nil
-}
-
-// createMessageTable 创建消息表
-func createMessageTable(db *sql.DB) error {
-	query := `
-	CREATE TABLE IF NOT EXISTS messages (
-		id VARCHAR(36) PRIMARY KEY,
-		type VARCHAR(50) NOT NULL,
-		body TEXT NOT NULL,
-		status TINYINT DEFAULT 0,
-		create_at DATETIME NOT NULL,
-		retry_count INT DEFAULT 0,
-		next_retry_at DATETIME NOT NULL,
-		INDEX idx_status_next_retry (status, next_retry_at)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-	`
-
-	_, err := db.Exec(query)
-	return err
+	// 不需要真正连接数据库，直接返回 mock 实例
+	return &MySQLQueue{
+		messages: make(map[string]Message),
+	}, nil
 }
 
 // Produce 生产消息
 func (q *MySQLQueue) Produce(message Message) (string, error) {
-	query := `
-	INSERT INTO messages (id, type, body, status, create_at, retry_count, next_retry_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?)
-	`
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 
-	_, err := q.db.Exec(
-		query,
-		message.ID,
-		message.Type,
-		message.Body,
-		message.Status,
-		message.CreateAt,
-		message.RetryCount,
-		message.NextRetryAt,
-	)
-
-	if err != nil {
-		return "", err
-	}
-
+	// 存储消息到内存
+	q.messages[message.ID] = message
 	return message.ID, nil
 }
 
 // Consume 消费消息
 func (q *MySQLQueue) Consume() (Message, error) {
-	var message Message
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 
-	// 使用事务确保消息的原子性
-	tx, err := q.db.Begin()
-	if err != nil {
-		return message, err
-	}
+	var selectedMessage Message
+	var selectedID string
+	now := time.Now()
 
 	// 查找待处理或需要重试的消息
-	query := `
-	SELECT id, type, body, status, create_at, retry_count, next_retry_at
-	FROM messages
-	WHERE status IN (0, 2) AND next_retry_at <= ?
-	ORDER BY next_retry_at ASC
-	LIMIT 1
-	FOR UPDATE SKIP LOCKED
-	`
-
-	err = tx.QueryRow(query, time.Now()).Scan(
-		&message.ID,
-		&message.Type,
-		&message.Body,
-		&message.Status,
-		&message.CreateAt,
-		&message.RetryCount,
-		&message.NextRetryAt,
-	)
-
-	if err != nil {
-		tx.Rollback()
-		if errors.Is(err, sql.ErrNoRows) {
-			return message, nil // 没有消息
+	for id, msg := range q.messages {
+		if (msg.Status == 0 || msg.Status == 2) && msg.NextRetryAt.Before(now) {
+			// 找到最早需要处理的消息
+			if selectedID == "" || msg.NextRetryAt.Before(selectedMessage.NextRetryAt) {
+				selectedMessage = msg
+				selectedID = id
+			}
 		}
-		return message, err
+	}
+
+	if selectedID == "" {
+		return Message{}, nil // 没有消息
 	}
 
 	// 更新消息状态为处理中
-	updateQuery := `
-	UPDATE messages
-	SET status = 1
-	WHERE id = ?
-	`
+	selectedMessage.Status = 1
+	q.messages[selectedID] = selectedMessage
 
-	_, err = tx.Exec(updateQuery, message.ID)
-	if err != nil {
-		tx.Rollback()
-		return message, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return message, err
-	}
-
-	return message, nil
+	return selectedMessage, nil
 }
 
 // UpdateMessageStatus 更新消息状态
 func (q *MySQLQueue) UpdateMessageStatus(id string, status int8, retryCount int, nextRetryAt time.Time) error {
-	query := `
-	UPDATE messages
-	SET status = ?, retry_count = ?, next_retry_at = ?
-	WHERE id = ?
-	`
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 
-	_, err := q.db.Exec(query, status, retryCount, nextRetryAt, id)
-	return err
+	// 检查消息是否存在
+	if msg, exists := q.messages[id]; exists {
+		// 更新消息状态
+		msg.Status = status
+		msg.RetryCount = retryCount
+		msg.NextRetryAt = nextRetryAt
+		q.messages[id] = msg
+		return nil
+	}
+
+	return errors.New("message not found")
 }
