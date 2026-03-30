@@ -14,8 +14,8 @@
 - 不需要关心外部 API 的返回值
 - 只需确保通知请求能够被稳定、可靠地送达
 
-## 思路
-类似一个「事件消息 -> 单一订阅者」的消息队列，可以抽象出一个消息路由，叫 `MessageRouter`，可分为 producer、consumer、broker 三个视角来考虑。
+## 思考
+类似要实现一个「事件消息 -> 单一订阅者」的消息队列，可分为 producer、consumer、broker 三个视角来考虑。
 
 producer:
 - 企业内部业务系统的事件，如：用户注册成功、订阅付款成功、购买商品等
@@ -29,26 +29,24 @@ consumer:
 broker 要做的事:
 - 为 producer 端提供一个 https 接口
 - 适配层（可配置），用于将 producer 端的消息转为 consumer 端需要的格式，并处理返回值
-- 可靠存储 producer 过来的消息，可使用消息队列
+- 可靠存储 producer 过来的消息，可使用消息队列或数据库
 - 可靠投递给 consumer 端的消息，此处需要考虑失败重试
 - 可支持 producer 端的事务消息（AI 提示）
 - 增加唯一标识，用于给 consumer 端做幂等判断（AI 提示）
 
-以上是必要的设计。另外可额外考虑对 consumer 的限流，批量处理，长连接等，这些不是必要的设计，后面可考虑。
-
-设计思路一般都会对比多家，自己的是一种，不同 AI 可提供多种。如果自己不预想思路，直接找 AI，后面就很难判断哪里的是过度设计，或者哪里漏了。
+以上是必要的设计。未来可考虑对 consumer 的限流，批量处理，长连接等。
 
 ## 详细设计
-### 消息生产服务
-/bin/message-router
+### 服务
+./message-router
 
-提供一个对外接口：
-- 生产消息：POST /message
+1. 提供一个对外接口，用于生产消息：
+- 接口名：POST /message
+- 请求参数：消息类型、消息体
+- 返回：消息 ID (用于状态查询)
 
-### 消费者服务
-/bin/message-worker
-
-用于从队列读取消息，并调用第三方接口。
+2. 批量起消费 Worker：
+- 用于从队列读取消息，并调用第三方接口。
 
 ### 消息队列
 消息队列是个代码级模块，不是服务。是个抽象，底层可以用多种实现，如 MySQL，RocketMQ 等。
@@ -59,6 +57,8 @@ type Queue interface {
     Produce(message Message) error
     // 消费消息
     Consume() (message Message, err error)
+    // 更新消息状态
+    UpdateMessageStatus(id string, status int8, retryCount int, nextRetryAt time.Time) error
 }
 
 // 消息
