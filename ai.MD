@@ -41,3 +41,4 @@ prompt 有很多，如下：
 - 队列不要使用内存队列，还是用 mysql，mock 实现
 - 消息生产成功，返回一个消息id
 - 在 readme.md 增加接口文档
+- memory_queue 没用了，删除吧
