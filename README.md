@@ -109,3 +109,74 @@ rc_hz/
 │   └── router.go         # HTTP 路由及处理器
 └── worker/
     └── worker.go         # Worker 逻辑
+
+## 快速开始
+
+### 构建
+
+```bash
+go build -o rc_hz
+```
+
+### 运行
+
+```bash
+./rc_hz
+```
+
+服务将同时启动 HTTP 服务器和 Worker 线程。
+
+## 配置
+
+通过环境变量配置：
+
+- `DSN`: MySQL 数据库连接字符串（可选，默认使用内存队列）
+- `WORKER_COUNT`: Worker 线程数量（默认：5）
+- `HTTP_PORT`: HTTP 服务端口（默认：8080）
+
+## API 文档
+
+### 生产消息
+
+**接口地址：** `POST /message`
+
+**请求头：**
+```
+Content-Type: application/json
+```
+
+**请求体：**
+```json
+{
+  "type": "user_registered",
+  "body": "{\"user_id\":123,\"source\":\"ad\",\"email\":\"test@example.com\"}"
+}
+```
+
+**参数说明：**
+- `type` (必填): 消息类型，支持以下类型：
+  - `user_registered`: 用户注册
+  - `user_subscribed`: 用户订阅
+  - `user_purchased`: 用户购买
+- `body` (必填): 消息体，JSON 字符串格式
+
+**响应：**
+```json
+{
+  "message_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**参数说明：**
+- `message_id`: 消息 ID，用于追踪消息状态
+
+**示例：**
+
+```bash
+curl -X POST http://localhost:8080/message \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "user_registered",
+    "body": "{\"user_id\":123,\"source\":\"ad\",\"email\":\"test@example.com\"}"
+  }'
+```
