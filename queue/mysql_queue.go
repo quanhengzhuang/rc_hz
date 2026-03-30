@@ -53,7 +53,7 @@ func createMessageTable(db *sql.DB) error {
 }
 
 // Produce 生产消息
-func (q *MySQLQueue) Produce(message Message) error {
+func (q *MySQLQueue) Produce(message Message) (string, error) {
 	query := `
 	INSERT INTO messages (id, type, body, status, create_at, retry_count, next_retry_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -70,7 +70,11 @@ func (q *MySQLQueue) Produce(message Message) error {
 		message.NextRetryAt,
 	)
 
-	return err
+	if err != nil {
+		return "", err
+	}
+
+	return message.ID, nil
 }
 
 // Consume 消费消息

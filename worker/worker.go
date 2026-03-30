@@ -24,25 +24,34 @@ func NewWorker(q queue.Queue, handlers map[string]handler.Handler) *Worker {
 }
 
 // Start 启动工作线程
-func (w *Worker) Start() {
-	for {
-		// 消费消息
-		message, err := w.queue.Consume()
-		if err != nil {
-			fmt.Printf("Error consuming message: %v\n", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
+func (w *Worker) Start(workerCount int) {
+	// 启动指定数量的工作线程
+	for i := 0; i < workerCount; i++ {
+		go func(id int) {
+			fmt.Printf("Worker %d started\n", id)
+			for {
+				// 消费消息
+				message, err := w.queue.Consume()
+				if err != nil {
+					fmt.Printf("Error consuming message: %v\n", err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
 
-		// 检查是否有消息
-		if message.ID == "" {
-			time.Sleep(1 * time.Second)
-			continue
-		}
+				// 检查是否有消息
+				if message.ID == "" {
+					time.Sleep(1 * time.Second)
+					continue
+				}
 
-		// 处理消息
-		w.processMessage(message)
+				// 处理消息
+				w.processMessage(message)
+			}
+		}(i)
 	}
+
+	// 阻塞主线程
+	select {}
 }
 
 // processMessage 处理消息
@@ -84,8 +93,6 @@ func (w *Worker) updateMessageStatus(message queue.Message, status int8) {
 		nextRetryAt = time.Now()
 	}
 
-	// 类型断言，获取 MySQLQueue 实例
-	if mysqlQueue, ok := w.queue.(*queue.MySQLQueue); ok {
-		mysqlQueue.UpdateMessageStatus(message.ID, status, retryCount, nextRetryAt)
-	}
+	// 调用队列的 UpdateMessageStatus 方法
+	w.queue.UpdateMessageStatus(message.ID, status, retryCount, nextRetryAt)
 }

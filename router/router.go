@@ -54,10 +54,11 @@ func (r *Router) produceMessage(c *gin.Context) {
 	}
 
 	// 生产消息
-	if err := r.queue.Produce(message); err != nil {
+	messageID, err := r.queue.Produce(message)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Message produced successfully"})
+	c.JSON(http.StatusOK, gin.H{"message_id": messageID})
 }
