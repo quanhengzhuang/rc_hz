@@ -126,7 +126,6 @@ type Message struct {
 type Handler struct {
     Handle(ctx context.Context, body string) error
 }
-```
 
 // Handler 配置
 HandlerConfig := map[string]Handler{
@@ -134,4 +133,22 @@ HandlerConfig := map[string]Handler{
     "user_subscribed": UserSubscribedHandler{},
     "user_purchased": UserPurchasedHandler{},
 }
+
+### 代码目录
+rc_hz/
+├── go.mod
+├── go.sum
+├── main.go               # 入口，根据命令行参数启动 router 或 worker
+├── config.go             # 配置（数据库连接、Worker 数量等）
+├── queue/
+│   ├── queue.go          # Queue 接口定义
+│   ├── mysql_queue.go    # MySQL 实现
+│   └── message.go        # Message 结构体
+├── handler/
+│   ├── handler.go        # Handler 接口
+│   └── examples.go       # 示例 Handler（UserRegistered 等）
+├── router/
+│   └── router.go         # HTTP 路由及处理器
+└── worker/
+    └── worker.go         # Worker 逻辑
 ```

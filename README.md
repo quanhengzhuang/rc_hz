@@ -84,7 +84,6 @@ type Message struct {
 type Handler struct {
     Handle(ctx context.Context, body string) error
 }
-```
 
 // Handler 配置
 HandlerConfig := map[string]Handler{
@@ -94,7 +93,6 @@ HandlerConfig := map[string]Handler{
 }
 
 ### 代码目录
-```
 rc_hz/
 ├── go.mod
 ├── go.sum
@@ -111,4 +109,3 @@ rc_hz/
 │   └── router.go         # HTTP 路由及处理器
 └── worker/
     └── worker.go         # Worker 逻辑
-```
